@@ -54,14 +54,15 @@ enum PlayMode { singleRepeat, sequentialRepeat, shuffle }
 class _PlayerPageState extends State<PlayerPage> {
   bool isPlaying = false;
   PlayMode playMode = PlayMode.sequentialRepeat; // Initialize the play mode
-  double progress = 0.3;
+  double progress = 0.0;
   final String currentSong = "Shape of You";
   final String coverImageUrl =
       "https://i1.sndcdn.com/artworks-000205276174-rkz33n-t500x500.jpg";
   final String currentArtist = "Ed Sheeran";
-  final String totalDuration = "4:24";
   int currentSongIndex = 0; // Track the index of the current song
   AudioPlayer audioPlayer = AudioPlayer(); // Create an AudioPlayer instance
+  Duration totalDuration = Duration.zero; // Change to Duration type
+  Duration currentPosition = Duration.zero;
   final List<String> audioFiles = [
     // 'assets/audio/Ed Sheeran - Shape Of You (Lyrics).mp3',
     'https://cdn.inpm.top/Ed%20Sheeran%20-%20Shape%20Of%20You%20%28Lyrics%29.mp3',
@@ -69,8 +70,26 @@ class _PlayerPageState extends State<PlayerPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    audioPlayer.onDurationChanged.listen((duration) {
+      setState(() {
+        totalDuration = duration;
+      });
+    });
+
+    audioPlayer.onPositionChanged.listen((position) {
+      setState(() {
+        currentPosition = position;
+        progress = currentPosition.inSeconds /
+            (totalDuration.inSeconds == 0 ? 1 : totalDuration.inSeconds);
+      });
+    });
+  }
+
+  @override
   void dispose() {
-    audioPlayer.dispose(); // Dispose of the audio player when not needed
+    // audioPlayer.dispose(); // Dispose of the audio player when not needed
     super.dispose();
   }
 
@@ -107,12 +126,12 @@ class _PlayerPageState extends State<PlayerPage> {
     if (isPlaying) {
       await audioPlayer.pause();
     } else {
-      await _playCurrentSong(); // Use the helper method to play the current song
+      _playCurrentSong();
+      // await audioPlayer.resume(); // Use the helper method to play the current song
     }
 
     setState(() {
       isPlaying = !isPlaying;
-      print("Playback state isPlaying changed to: $isPlaying");
     });
     // Here you can add logic to play or pause the audio player
   }
@@ -137,7 +156,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   String get currentTime {
-    final totalSeconds = _durationToSeconds(totalDuration);
+    final totalSeconds = _durationToSeconds(totalDuration as String);
     final currentSeconds = (totalSeconds * progress).round();
     return _secondsToDuration(currentSeconds);
   }
@@ -202,10 +221,11 @@ class _PlayerPageState extends State<PlayerPage> {
                 onChanged: (value) {
                   setState(() {
                     progress = value;
+                    final newPosition = Duration(
+                        seconds: (value * totalDuration.inSeconds).round());
+                    audioPlayer.seek(newPosition);
                   });
                 },
-                // thumbShape: const RoundSliderThumbShape(
-                //     enabledThumbRadius: 8.0), // Reduced thumb size
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -213,11 +233,11 @@ class _PlayerPageState extends State<PlayerPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      currentTime,
+                      _secondsToDuration(currentPosition.inSeconds),
                       style: TextStyle(fontSize: 14),
                     ),
                     Text(
-                      totalDuration,
+                      _secondsToDuration(totalDuration.inSeconds),
                       style: TextStyle(fontSize: 14),
                     ),
                   ],
@@ -291,110 +311,6 @@ class LyricsPage extends StatelessWidget {
     final List<String> lyrics = [
       "The club isn’t the best place to find a lover",
       "So the bar is where I go",
-      "Me and my friends at the table doing shots drinking fast and then we talk slow",
-      "you come over and start up a conversation with just me and trust me I’ll give it a chance now",
-      "Take my hand stop, put van the man on the jukebox and then we start to dance",
-      "And now I’m singing like",
-      "Girl you know I want your love",
-      "Your love was handmade for somebody like me",
-      "Come on now follow my lead",
-      "I may be crazy don’t mind me",
-      "Say boy let’s not talk too much",
-      "Grab on my waist and put that body on me",
-      "Come on now follow my lead",
-      "Come come on now follow my lead",
-      "I’m in love with the shape of you",
-      "We push and pull like a magnet do",
-      "Although my heart is falling too",
-      "I’m in love with your body",
-      "Last night you were in my room",
-      "And now my bed sheets smell like you",
-      "Every day discovering something brand new",
-      "I’m in love with your body",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "I’m in love with your body",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "I’m in love with your body",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "I’m in love with your body",
-      "Every day discovering something brand new",
-      "I’m in love with the shape of you",
-      "One week in we let the story begin",
-      "We’re going out on our first date",
-      "You and me are thrifty",
-      "So go all you can eat",
-      "Fill up your bag and I fill up a plate",
-      "We talk for hours and hours about the sweet and the sour",
-      "And how your family’s doing ok",
-      "leave and get in a taxi, then kiss in the backseat",
-      "Tell the driver make the radio play",
-      "and I'm singing like",
-      "Girl you know I want your love",
-      "Your love was handmade for somebody like me",
-      "Come on now follow my lead",
-      "I may be crazy, don’t mind me",
-      "Say boy let’s not talk too much",
-      "Grab on my waist and put that body on me",
-      "Come on now follow my lead",
-      "Come come on now follow my lead",
-      "I’m in love with the shape of you",
-      "We push and pull like a magnet do",
-      "Although my heart is falling too",
-      "I’m in love with your body",
-      "Last night you were in my room",
-      "And now my bed sheets smell like you",
-      "Every day discovering something brand new",
-      "Well I’m in love with your body",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "I’m in love with your body",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "I’m in love with your body",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "Oh I",
-      "I’m in love with your body",
-      "Every day discovering something brand new",
-      "I’m in love with the shape of you",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "I’m in love with the shape of you",
-      "We push and pull like a magnet do",
-      "Although my heart is falling too",
-      "I’m in love with your body",
-      "Last night you were in my room",
-      "And now my bed sheets smell like you",
-      "Every day discovering something brand new",
-      "Well I’m in love with your body",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Come on be my baby come on",
-      "Every day discovering something brand new",
-      "I’m in love with the shape of you"
     ];
     return ListView.builder(
       itemCount: lyrics.length,
