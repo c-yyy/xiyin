@@ -66,12 +66,18 @@ class _PlayerPageState extends State<PlayerPage> {
   final List<String> audioFiles = [
     // 'assets/audio/Ed Sheeran - Shape Of You (Lyrics).mp3',
     'https://cdn.inpm.top/Ed%20Sheeran%20-%20Shape%20Of%20You%20%28Lyrics%29.mp3',
+    'https://cdn.inpm.top/%E6%8E%A8%E5%BC%80%E4%B8%96%E7%95%8C%E7%9A%84%E9%97%A8%20-%20%E6%9D%A8%E4%B9%83%E6%96%87%E3%80%90Hi-Res%E6%97%A0%E6%8D%9F%E9%9F%B3%E8%B4%A8%E3%80%91%20.mp3',
+    'https://cdn.inpm.top/%E3%80%904K60FPS%E3%80%91%E5%91%A8%E6%9D%B0%E4%BC%A6%E3%80%8A%E6%9A%97%E5%8F%B7%E3%80%8B%20%E7%A5%9E%E7%BA%A7%E7%8E%B0%E5%9C%BA%EF%BC%81The%20one%E6%BC%94%E5%94%B1%E4%BC%9Alive%20-%20001%20-%20%E3%80%904K60FPS%E3%80%91%E5%91%A8%E6%9D%B0%E4%BC%A6%E3%80%8A%E6%9A%97%E5%8F%B7%E3%80%8B%20%E7%A5%9E%E7%BA%A7%E7%8E%B0%E5%9C%BA%EF%BC%81The%20one%E6%BC%94%E5%94%B1%E4%BC%9Alive.mp3',
+    'https://cdn.inpm.top/%E3%80%904K60FPS%E3%80%91%E6%96%B9%E5%A4%A7%E5%90%8C%E3%80%8ALove%20Song%E3%80%8B%E4%B8%87%E4%BA%BA%E5%A4%A7%E5%90%88%E5%94%B1%E7%8E%B0%E5%9C%BA%EF%BC%81%E4%B8%96%E7%95%8C%E5%90%8D%E7%94%BB%20-%20001%20-%20%E3%80%904K60FPS%E3%80%91%E6%96%B9%E5%A4%A7%E5%90%8C%E3%80%8ALove%20Song%E3%80%8B%E4%B8%87%E4%BA%BA%E5%A4%A7%E5%90%88%E5%94%B1%E7%8E%B0%E5%9C%BA%EF%BC%81%E4%B8%96%E7%95%8C%E5%90%8D%E7%94%BB.mp3'
     // Add more audio files as needed
   ];
 
   @override
   void initState() {
     super.initState();
+    // Load the first audio file and get its duration
+    _loadFirstAudioFile();
+
     audioPlayer.onDurationChanged.listen((duration) {
       setState(() {
         totalDuration = duration;
@@ -85,6 +91,12 @@ class _PlayerPageState extends State<PlayerPage> {
             (totalDuration.inSeconds == 0 ? 1 : totalDuration.inSeconds);
       });
     });
+  }
+
+  // Method to load the first audio file and set its duration
+  Future<void> _loadFirstAudioFile() async {
+    await audioPlayer.setSourceUrl(audioFiles[currentSongIndex]);
+    totalDuration = await audioPlayer.getDuration() ?? Duration.zero;
   }
 
   @override
@@ -126,14 +138,30 @@ class _PlayerPageState extends State<PlayerPage> {
     if (isPlaying) {
       await audioPlayer.pause();
     } else {
-      _playCurrentSong();
-      // await audioPlayer.resume(); // Use the helper method to play the current song
+      await audioPlayer
+          .resume(); // Use the helper method to play the current song
     }
 
     setState(() {
       isPlaying = !isPlaying;
     });
     // Here you can add logic to play or pause the audio player
+  }
+
+  // Method to change the song based on the direction
+  void _changeSong() async {
+    switch (playMode) {
+      case PlayMode.singleRepeat:
+        // Do nothing, as the current song will repeat
+        break;
+      case PlayMode.sequentialRepeat:
+        currentSongIndex = (currentSongIndex + 1) % audioFiles.length;
+        break;
+      case PlayMode.shuffle:
+        currentSongIndex = Random().nextInt(audioFiles.length);
+        break;
+    }
+    await _playCurrentSong();
   }
 
   // Method to switch to the next song in the list
@@ -152,7 +180,11 @@ class _PlayerPageState extends State<PlayerPage> {
   // Helper method to play the current song
   Future<void> _playCurrentSong() async {
     await audioPlayer.stop(); // Stop the previous song
-    await audioPlayer.play(UrlSource(audioFiles[currentSongIndex]));
+    await audioPlayer.play(
+        UrlSource(audioFiles[currentSongIndex])); // Ensure this is correct
+    setState(() {
+      isPlaying = true;
+    });
   }
 
   String get currentTime {
@@ -282,6 +314,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   onPressed: () {
                     // Logic to switch play mode
+                    _changeSong();
                     setState(() {
                       playMode = PlayMode.values[
                           (playMode.index + 1) % PlayMode.values.length];
