@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:math';
 import 'package:audioplayers/audioplayers.dart';
+// import 'package:path_provider/path_provider.dart';
+// import 'package:dio/dio.dart';
+// import 'dart:io';
 
 void main() {
   runApp(MyApp());
@@ -167,6 +170,7 @@ class _PlayerPageState extends State<PlayerPage> {
   // Method to switch to the next song in the list
   void _nextSong() async {
     currentSongIndex = (currentSongIndex + 1) % audioFiles.length;
+    await _preloadNextSong();
     await _playCurrentSong();
   }
 
@@ -174,8 +178,47 @@ class _PlayerPageState extends State<PlayerPage> {
   void _previousSong() async {
     currentSongIndex =
         (currentSongIndex - 1 + audioFiles.length) % audioFiles.length;
+    await _preloadNextSong();
     await _playCurrentSong();
   }
+
+  // Method to preload the next song
+  Future<void> _preloadNextSong() async {
+    // Preload the next song to reduce delay
+    await audioPlayer.setSourceUrl(audioFiles[currentSongIndex]);
+  }
+
+  // // Method to preload the next song
+  // Future<void> _preloadNextSong() async {
+  //   final filePath = await _getCachedFilePath(audioFiles[currentSongIndex]);
+  //   if (await File(filePath).exists()) {
+  //     // If the file is already cached, use it
+  //     await audioPlayer.setSourceDeviceFile(filePath);
+  //   } else {
+  //     // Otherwise, download and cache the file
+  //     await _downloadAndCacheFile(audioFiles[currentSongIndex], filePath);
+  //     await audioPlayer.setSourceDeviceFile(filePath);
+  //   }
+  // }
+
+  // // Method to download and cache the audio file
+  // Future<void> _downloadAndCacheFile(String url, String filePath) async {
+  //   try {
+  //     final response = await Dio().download(url, filePath);
+  //     if (response.statusCode == 200) {
+  //       print('File downloaded and cached at $filePath');
+  //     }
+  //   } catch (e) {
+  //     print('Error downloading file: $e');
+  //   }
+  // }
+
+  // // Method to get the cached file path
+  // Future<String> _getCachedFilePath(String url) async {
+  //   final directory = await getApplicationDocumentsDirectory();
+  //   final fileName = url.split('/').last;
+  //   return '${directory.path}/$fileName';
+  // }
 
   // Helper method to play the current song
   Future<void> _playCurrentSong() async {
