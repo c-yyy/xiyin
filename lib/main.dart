@@ -1,15 +1,21 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:math';
+import 'dart:io';
+import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
-// import 'package:path_provider/path_provider.dart';
-// import 'package:dio/dio.dart';
-// import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(MyApp());
 }
 
+// 请要下面要求帮我完善代码：
+// 1.audioFiles为本地音乐目录，使用 os.listdir 遍历目录，过滤音频格式（如 .mp3），提取文件名称作为播放列表_showPlayList，点击后播放对应的音频文件，使用索引（如数据库索引或哈希表）快速定位歌曲。（延迟加载元数据 :首次扫描时仅记录文件路径，播放时再解析元数据。多线程扫描 : 大型目录使用后台线程加载歌曲，避免界面卡顿。）
+// 2.播放列表可能包含上千首歌，首次只加载元数据，滚动时加载歌曲详情（懒加载）。缓存随机序列 : 随机模式下预生成多个播放序列，减少频繁计算。
+// 3.播放模式切换。顺序播放 : 直接按列表索引递增，超出后回到开头。随机播放 : 预生成乱序索引列表 (_shuffled_indices)，避免重复播放。单曲循环 : 始终返回当前歌曲，不修改索引。
+// 4.**状态持久化。**保存最后一次播放位置和模式到本地文件
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -56,31 +62,19 @@ enum PlayMode { singleRepeat, sequentialRepeat, shuffle }
 
 class _PlayerPageState extends State<PlayerPage> {
   bool isPlaying = false;
-  PlayMode playMode = PlayMode.sequentialRepeat; // Initialize the play mode
+  PlayMode playMode = PlayMode.sequentialRepeat;
   double progress = 0.0;
-  final String currentSong = "Shape of You";
-  final String coverImageUrl =
-      "https://i1.sndcdn.com/artworks-000205276174-rkz33n-t500x500.jpg";
-  final String currentArtist = "Ed Sheeran";
-  int currentSongIndex = 0; // Track the index of the current song
-  AudioPlayer audioPlayer = AudioPlayer(); // Create an AudioPlayer instance
-  Duration totalDuration = Duration.zero; // Change to Duration type
+  int currentSongIndex = 0;
+  AudioPlayer audioPlayer = AudioPlayer();
+  Duration totalDuration = Duration.zero;
   Duration currentPosition = Duration.zero;
-  final List<String> audioFiles = [
-    // 'assets/audio/Ed Sheeran - Shape Of You (Lyrics).mp3',
-    'https://cdn.inpm.top/Ed%20Sheeran%20-%20Shape%20Of%20You%20%28Lyrics%29.mp3',
-    'https://cdn.inpm.top/%E6%8E%A8%E5%BC%80%E4%B8%96%E7%95%8C%E7%9A%84%E9%97%A8%20-%20%E6%9D%A8%E4%B9%83%E6%96%87%E3%80%90Hi-Res%E6%97%A0%E6%8D%9F%E9%9F%B3%E8%B4%A8%E3%80%91%20.mp3',
-    'https://cdn.inpm.top/%E3%80%904K60FPS%E3%80%91%E5%91%A8%E6%9D%B0%E4%BC%A6%E3%80%8A%E6%9A%97%E5%8F%B7%E3%80%8B%20%E7%A5%9E%E7%BA%A7%E7%8E%B0%E5%9C%BA%EF%BC%81The%20one%E6%BC%94%E5%94%B1%E4%BC%9Alive%20-%20001%20-%20%E3%80%904K60FPS%E3%80%91%E5%91%A8%E6%9D%B0%E4%BC%A6%E3%80%8A%E6%9A%97%E5%8F%B7%E3%80%8B%20%E7%A5%9E%E7%BA%A7%E7%8E%B0%E5%9C%BA%EF%BC%81The%20one%E6%BC%94%E5%94%B1%E4%BC%9Alive.mp3',
-    'https://cdn.inpm.top/%E3%80%904K60FPS%E3%80%91%E6%96%B9%E5%A4%A7%E5%90%8C%E3%80%8ALove%20Song%E3%80%8B%E4%B8%87%E4%BA%BA%E5%A4%A7%E5%90%88%E5%94%B1%E7%8E%B0%E5%9C%BA%EF%BC%81%E4%B8%96%E7%95%8C%E5%90%8D%E7%94%BB%20-%20001%20-%20%E3%80%904K60FPS%E3%80%91%E6%96%B9%E5%A4%A7%E5%90%8C%E3%80%8ALove%20Song%E3%80%8B%E4%B8%87%E4%BA%BA%E5%A4%A7%E5%90%88%E5%94%B1%E7%8E%B0%E5%9C%BA%EF%BC%81%E4%B8%96%E7%95%8C%E5%90%8D%E7%94%BB.mp3'
-    // Add more audio files as needed
-  ];
+  List<String> audioFiles = [];
+  Map<String, String> audioFilePaths = {};
 
   @override
   void initState() {
     super.initState();
-    // Load the first audio file and get its duration
-    _loadFirstAudioFile();
-
+    _scanAudioFiles();
     audioPlayer.onDurationChanged.listen((duration) {
       setState(() {
         totalDuration = duration;
@@ -96,39 +90,43 @@ class _PlayerPageState extends State<PlayerPage> {
     });
   }
 
-  // Method to load the first audio file and set its duration
-  Future<void> _loadFirstAudioFile() async {
-    await audioPlayer.setSourceUrl(audioFiles[currentSongIndex]);
-    totalDuration = await audioPlayer.getDuration() ?? Duration.zero;
+  Future<void> _scanAudioFiles() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final audioDir = Directory('${directory.path}/audio');
+    print(audioDir);
+    if (await audioDir.exists()) {
+      final files = audioDir.listSync();
+      for (var file in files) {
+        if (file is File && file.path.endsWith('.mp3')) {
+          final fileName = file.uri.pathSegments.last;
+          audioFiles.add(fileName);
+          audioFilePaths[fileName] = file.path;
+        }
+      }
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
-    // audioPlayer.dispose(); // Dispose of the audio player when not needed
+    audioPlayer.dispose();
     super.dispose();
   }
 
   void _showPlaylist(BuildContext context) {
-    final random = Random();
-    final List<String> dummySongs = [
-      "Song A",
-      "Song B",
-      "Song C",
-      "Song D",
-      "Song E"
-    ];
-    // Shuffle the list and take 3 random songs
-    final List<String> selectedSongs =
-        (dummySongs..shuffle(random)).take(3).toList();
-
     showModalBottomSheet(
       context: context,
       builder: (BuildContext context) {
         return ListView.builder(
-          itemCount: selectedSongs.length,
+          itemCount: audioFiles.length,
           itemBuilder: (context, index) {
             return ListTile(
-              title: Text(selectedSongs[index]),
+              title: Text(audioFiles[index]),
+              onTap: () {
+                currentSongIndex = index;
+                _playCurrentSong();
+                Navigator.pop(context);
+              },
             );
           },
         );
@@ -136,26 +134,21 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
-  // Method to toggle play and pause
   void _togglePlayPause() async {
     if (isPlaying) {
       await audioPlayer.pause();
     } else {
-      await audioPlayer
-          .resume(); // Use the helper method to play the current song
+      await audioPlayer.resume();
     }
 
     setState(() {
       isPlaying = !isPlaying;
     });
-    // Here you can add logic to play or pause the audio player
   }
 
-  // Method to change the song based on the direction
   void _changeSong() async {
     switch (playMode) {
       case PlayMode.singleRepeat:
-        // Do nothing, as the current song will repeat
         break;
       case PlayMode.sequentialRepeat:
         currentSongIndex = (currentSongIndex + 1) % audioFiles.length;
@@ -167,86 +160,26 @@ class _PlayerPageState extends State<PlayerPage> {
     await _playCurrentSong();
   }
 
-  // Method to switch to the next song in the list
   void _nextSong() async {
     currentSongIndex = (currentSongIndex + 1) % audioFiles.length;
-    await _preloadNextSong();
     await _playCurrentSong();
   }
 
-  // Method to switch to the previous song in the list
   void _previousSong() async {
     currentSongIndex =
         (currentSongIndex - 1 + audioFiles.length) % audioFiles.length;
-    await _preloadNextSong();
     await _playCurrentSong();
   }
 
-  // Method to preload the next song
-  Future<void> _preloadNextSong() async {
-    // Preload the next song to reduce delay
-    await audioPlayer.setSourceUrl(audioFiles[currentSongIndex]);
-  }
-
-  // // Method to preload the next song
-  // Future<void> _preloadNextSong() async {
-  //   final filePath = await _getCachedFilePath(audioFiles[currentSongIndex]);
-  //   if (await File(filePath).exists()) {
-  //     // If the file is already cached, use it
-  //     await audioPlayer.setSourceDeviceFile(filePath);
-  //   } else {
-  //     // Otherwise, download and cache the file
-  //     await _downloadAndCacheFile(audioFiles[currentSongIndex], filePath);
-  //     await audioPlayer.setSourceDeviceFile(filePath);
-  //   }
-  // }
-
-  // // Method to download and cache the audio file
-  // Future<void> _downloadAndCacheFile(String url, String filePath) async {
-  //   try {
-  //     final response = await Dio().download(url, filePath);
-  //     if (response.statusCode == 200) {
-  //       print('File downloaded and cached at $filePath');
-  //     }
-  //   } catch (e) {
-  //     print('Error downloading file: $e');
-  //   }
-  // }
-
-  // // Method to get the cached file path
-  // Future<String> _getCachedFilePath(String url) async {
-  //   final directory = await getApplicationDocumentsDirectory();
-  //   final fileName = url.split('/').last;
-  //   return '${directory.path}/$fileName';
-  // }
-
-  // Helper method to play the current song
   Future<void> _playCurrentSong() async {
-    await audioPlayer.stop(); // Stop the previous song
-    await audioPlayer.play(
-        UrlSource(audioFiles[currentSongIndex])); // Ensure this is correct
-    setState(() {
-      isPlaying = true;
-    });
-  }
-
-  String get currentTime {
-    final totalSeconds = _durationToSeconds(totalDuration as String);
-    final currentSeconds = (totalSeconds * progress).round();
-    return _secondsToDuration(currentSeconds);
-  }
-
-  int _durationToSeconds(String duration) {
-    final parts = duration.split(':');
-    final minutes = int.parse(parts[0]);
-    final seconds = int.parse(parts[1]);
-    return minutes * 60 + seconds;
-  }
-
-  String _secondsToDuration(int seconds) {
-    final minutes = seconds ~/ 60;
-    final remainingSeconds = seconds % 60;
-    return '${minutes.toString().padLeft(1, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+    await audioPlayer.stop();
+    final filePath = audioFilePaths[audioFiles[currentSongIndex]];
+    if (filePath != null) {
+      await audioPlayer.play(DeviceFileSource(filePath));
+      setState(() {
+        isPlaying = true;
+      });
+    }
   }
 
   Icon getPlayModeIcon() {
@@ -275,18 +208,23 @@ class _PlayerPageState extends State<PlayerPage> {
               color: Colors.grey,
               borderRadius: BorderRadius.circular(18),
               image: DecorationImage(
-                image: NetworkImage(coverImageUrl),
+                image: NetworkImage(
+                    "https://i1.sndcdn.com/artworks-000205276174-rkz33n-t500x500.jpg"),
                 fit: BoxFit.cover,
               ),
             ),
-            child: coverImageUrl.isEmpty
-                ? Icon(Icons.music_note, size: 185)
-                : null,
+            child: null,
           ),
           SizedBox(height: 20),
-          Text(currentSong, style: TextStyle(fontSize: 24)),
-          SizedBox(height: 10),
-          Text(currentArtist, style: TextStyle(fontSize: 18)),
+          Text(
+            audioFiles.isNotEmpty
+                ? audioFiles[currentSongIndex].split('.').first
+                : '',
+            style: TextStyle(fontSize: 24),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
           SizedBox(height: 30),
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -353,10 +291,9 @@ class _PlayerPageState extends State<PlayerPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
-                  icon: getPlayModeIcon(), // Icon for play mode
+                  icon: getPlayModeIcon(),
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   onPressed: () {
-                    // Logic to switch play mode
                     _changeSong();
                     setState(() {
                       playMode = PlayMode.values[
@@ -365,8 +302,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   },
                 ),
                 IconButton(
-                  icon:
-                      Icon(Icons.playlist_play, size: 36), // Icon for playlist
+                  icon: Icon(Icons.playlist_play, size: 36),
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   onPressed: () {
                     _showPlaylist(context);
@@ -378,6 +314,12 @@ class _PlayerPageState extends State<PlayerPage> {
         ],
       ),
     );
+  }
+
+  String _secondsToDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(1, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 }
 
