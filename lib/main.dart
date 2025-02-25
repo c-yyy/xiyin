@@ -72,6 +72,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Map<String, String> audioFilePaths = {};
 
   @override
+  @override
   void initState() {
     super.initState();
     _scanAudioFiles();
@@ -88,6 +89,18 @@ class _PlayerPageState extends State<PlayerPage> {
             (totalDuration.inSeconds == 0 ? 1 : totalDuration.inSeconds);
       });
     });
+
+    _initializeAudioPlayer();
+  }
+
+  Future<void> _initializeAudioPlayer() async {
+    if (currentSongIndex == 0) {
+      await audioPlayer.stop();
+      final filePath = audioFilePaths[audioFiles[currentSongIndex]];
+      if (filePath != null) {
+        await audioPlayer.setSourceDeviceFile(filePath);
+      }
+    }
   }
 
   Future<void> _scanAudioFiles() async {
