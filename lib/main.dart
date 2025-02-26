@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
@@ -39,11 +40,37 @@ class MyApp extends StatelessWidget {
 
 class MyAppState extends ChangeNotifier {}
 
-class MusicPlayerHomePage extends StatelessWidget {
+class MusicPlayerHomePage extends StatefulWidget {
+  @override
+  _MusicPlayerHomePageState createState() => _MusicPlayerHomePageState();
+}
+
+class _MusicPlayerHomePageState extends State<MusicPlayerHomePage> {
+  int _page = 0;
+  GlobalKey<CurvedNavigationBarState> _bottomNavigationKey = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      bottomNavigationBar: CurvedNavigationBar(
+        key: _bottomNavigationKey,
+        items: <Widget>[
+          Icon(Icons.music_note, size: 30),
+          Icon(Icons.settings, size: 30),
+        ],
+        onTap: (index) {
+          setState(() {
+            _page = index;
+          });
+        },
+      ),
       body: PageView(
+        controller: PageController(initialPage: _page),
+        onPageChanged: (index) {
+          setState(() {
+            _page = index;
+          });
+        },
         children: [
           PlayerPage(),
           LyricsPage(),
@@ -70,24 +97,29 @@ class _PlayerPageState extends State<PlayerPage> {
   Duration currentPosition = Duration.zero;
   List<String> audioFiles = [];
   Map<String, String> audioFilePaths = {};
+  StreamSubscription<Duration>? _durationSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
 
-  @override
   @override
   void initState() {
     super.initState();
     _scanAudioFiles();
-    audioPlayer.onDurationChanged.listen((duration) {
-      setState(() {
-        totalDuration = duration;
-      });
+    _durationSubscription = audioPlayer.onDurationChanged.listen((duration) {
+      if (mounted) {
+        setState(() {
+          totalDuration = duration;
+        });
+      }
     });
 
-    audioPlayer.onPositionChanged.listen((position) {
-      setState(() {
-        currentPosition = position;
-        progress = currentPosition.inSeconds /
-            (totalDuration.inSeconds == 0 ? 1 : totalDuration.inSeconds);
-      });
+    _positionSubscription = audioPlayer.onPositionChanged.listen((position) {
+      if (mounted) {
+        setState(() {
+          currentPosition = position;
+          progress = currentPosition.inSeconds /
+              (totalDuration.inSeconds == 0 ? 1 : totalDuration.inSeconds);
+        });
+      }
     });
 
     _initializeAudioPlayer();
@@ -116,12 +148,16 @@ class _PlayerPageState extends State<PlayerPage> {
           audioFilePaths[fileName] = file.path;
         }
       }
-      setState(() {});
+      if (mounted) {
+        setState(() {});
+      }
     }
   }
 
   @override
   void dispose() {
+    _durationSubscription?.cancel();
+    _positionSubscription?.cancel();
     audioPlayer.dispose();
     super.dispose();
   }
